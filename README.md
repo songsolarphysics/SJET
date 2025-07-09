@@ -1,6 +1,6 @@
 # SJET: Solar Jet Extraction Tool
 
-An interactive multi-algorithm solar jet extraction tool for quantitative analysis of solar jet phenomena using high-resolution solar observations.
+An interactive multi-algorithm solar jet extraction tool for quantitative analysis of solar jet phenomena.
 
 ## Overview
 
