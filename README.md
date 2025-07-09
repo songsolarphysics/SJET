@@ -18,29 +18,6 @@ SJET (Solar Jet Extraction Tool) is a Python-based tool designed for extracting 
 - **Four-Panel Visualization**: Original data, binary mask, extracted jet, and edge detection
 - **Data Export**: FITS and PNG format output with metadata preservation
 
-## Requirements
-
-### Dependencies
-
-```python
-numpy
-matplotlib
-scipy
-scikit-image
-opencv-python
-astropy
-sunpy
-tkinter
-```
-
-## Installation
-
-```bash
-git clone https://github.com/yourusername/SJET.git
-cd SJET
-pip install -r requirements.txt
-```
-
 ## Quick Start
 
 1. **Launch SJET**:
@@ -82,9 +59,9 @@ print(f"Rotation: {results['rotation_angle_deg']:.2f} degrees")
 
 ## Supported Data
 
-- **Solar Orbiter/EUI**: HRI_EUV 174 Å observations
-- **SDO/AIA**: Multi-wavelength data (304 Å tested)
-- **Format**: FITS files with standard headers
+- **Solar Orbiter/EUI**: HRI_EUV 174 Å
+- **SDO/AIA**: Multi-wavelength (304 Å tested)
+- **Format**: sunpy compatible imaging files
 
 ## Thresholding Methods
 
@@ -102,11 +79,11 @@ print(f"Rotation: {results['rotation_angle_deg']:.2f} degrees")
 ## Citation
 
 ```bibtex
-@article{tan2024sjet,
+@article{tan2025sjet,
     title={SJET: An Interactive Multi-Algorithm Solar Jet Extraction Tool},
     author={Tan, Song and Warmuth, Alexander and Schuller, Frédéric and Shen, Yuandeng and Mitchell, Jake A. J. and Liu, Zedong},
-    journal={Astronomy \& Astrophysics},
-    year={2024},
+    journal={xxx},
+    year={2025},
     note={Submitted}
 }
 ```
@@ -141,28 +118,6 @@ SJET（太阳喷流提取工具）是一个基于Python开发的交互式多算�
 - **四面板可视化**: 同时显示原始数据、二值掩膜、提取的喷流和边缘检测结果
 - **数据导出**: 支持FITS和PNG格式输出，保留完整元数据
 
-## 系统要求
-
-### 依赖包
-
-```python
-numpy
-matplotlib
-scipy
-scikit-image
-opencv-python
-astropy
-sunpy
-tkinter
-```
-
-## 安装方法
-
-```bash
-git clone https://github.com/yourusername/SJET.git
-cd SJET
-pip install -r requirements.txt
-```
 
 ## 快速开始
 
@@ -207,7 +162,7 @@ print(f"旋转角: {results['rotation_angle_deg']:.2f} 度")
 
 - **Solar Orbiter/EUI**: HRI_EUV 174 Å观测数据
 - **SDO/AIA**: 多波长数据（已测试304 Å）
-- **格式**: 标准FITS文件
+- **格式**: sunpy兼容的标准FITS文件
 
 ## 阈值方法说明
 
@@ -225,11 +180,11 @@ print(f"旋转角: {results['rotation_angle_deg']:.2f} 度")
 ## 引用格式
 
 ```bibtex
-@article{tan2024sjet,
+@article{tan2025sjet,
     title={SJET: An Interactive Multi-Algorithm Solar Jet Extraction Tool},
     author={Tan, Song and Warmuth, Alexander and Schuller, Frédéric and Shen, Yuandeng and Mitchell, Jake A. J. and Liu, Zedong},
-    journal={Astronomy \& Astrophysics},
-    year={2024},
+    journal={xxx},
+    year={2025},
     note={Submitted}
 }
 ```
