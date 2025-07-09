@@ -91,7 +91,7 @@ print(f"Rotation: {results['rotation_angle_deg']:.2f} degrees")
 ## Contact
 
 - **Issues**: Submit via GitHub Issues
-- **Contact**: awarmuth@aip.de
+- **Contact**: stan@aip.de/tansong430@gmail.com
 - **Institution**: Leibniz Institute for Astrophysics Potsdam (AIP)
 
 ## License
@@ -192,7 +192,7 @@ print(f"旋转角: {results['rotation_angle_deg']:.2f} 度")
 ## 联系方式
 
 - **问题反馈**: 通过GitHub Issues提交
-- **联系邮箱**: awarmuth@aip.de  
+- **联系邮箱**: stan@aip.de/tansong430@gmail.com  
 - **机构**: 莱布尼茨天体物理研究所 (AIP)
 
 ## 许可证
