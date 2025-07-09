@@ -1,0 +1,421 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy.io import fits
+from skimage import measure, morphology
+import os
+
+def analyze_jet_circular_regions(file_path, visualize=True, save_results=False, output_file=None)
+    
+    Analyze a solar jet using circular regions to identify start and end points.
+
+    This method
+    1. Finds the two points in the jet mask that are farthest apart
+    2. Creates circular regions centered at these points with radius = half the distance
+    3. Counts mask points in each circle
+    4. The circle containing more mask points is identified as the start point
+
+    Parameters
+    -----------
+    file_path  str
+        Path to the binary mask FITS file
+    visualize  bool, optional
+        Whether to visualize the results (default True)
+    save_results  bool, optional
+        Whether to save the results to a file (default False)
+    output_file  str, optional
+        Path to save the results (default None)
+
+    Returns
+    --------
+    dict
+        Dictionary containing the geometric parameters of the jet
+    
+    # Load binary mask
+    with fits.open(file_path) as hdul
+        binary_mask = hdul[0].data.astype(bool)
+
+    # Find coordinates of all points in the mask
+    mask_coords = np.column_stack(np.where(binary_mask))
+    
+    # Calculate total area of mask (number of pixels)
+    mask_area = np.sum(binary_mask)
+
+    # Find the two points that are farthest apart - using deterministic sampling
+    max_distance = 0
+    point1_idx = point2_idx = 0
+
+    # For small masks, check all point pairs
+    if len(mask_coords)  1000
+        coords_to_check = mask_coords
+        indices_map = np.arange(len(mask_coords))
+    else
+        # For large masks, use deterministic equidistant sampling
+        sample_size = min(1000, len(mask_coords))
+        step = len(mask_coords)  sample_size
+        sample_indices = np.arange(0, len(mask_coords), step)[sample_size]
+        coords_to_check = mask_coords[sample_indices]
+        indices_map = sample_indices
+
+    # Find the farthest point pair
+    for i in range(len(coords_to_check))
+        for j in range(i+1, len(coords_to_check))
+            dist = np.sum((coords_to_check[i] - coords_to_check[j])2)
+            if dist  max_distance
+                max_distance = dist
+                point1_idx = indices_map[i] if len(mask_coords) = 1000 else i
+                point2_idx = indices_map[j] if len(mask_coords) = 1000 else j
+
+    max_distance = np.sqrt(max_distance)
+    point1 = mask_coords[point1_idx]
+    point2 = mask_coords[point2_idx]
+
+    # Create circular regions centered at these points
+    radius = max_distance  2
+
+    # Count the number of points in each circle
+    count1 = count2 = 0
+    for point in mask_coords
+        dist1 = np.sqrt(np.sum((point - point1)2))
+        if dist1 = radius
+            count1 += 1
+
+        dist2 = np.sqrt(np.sum((point - point2)2))
+        if dist2 = radius
+            count2 += 1
+
+    # Determine start and end points based on point density
+    if count1 = count2
+        start_point = point1
+        end_point = point2
+    else
+        start_point = point2
+        end_point = point1
+
+    # Calculate the geometric center of the mask
+    center_point = np.mean(mask_coords, axis=0).astype(int)
+
+    # Calculate control points for quadratic Bezier curve
+    control_point = 2center_point - start_point2 - end_point2
+
+    # Create control point array for Bezier curve
+    control_points = np.array([start_point, control_point, end_point])
+
+    # Generate points on the Bezier curve
+    curve_points = bezier_curve(control_points, num_points=100)
+
+    # Calculate actual length of the curve (in pixels)
+    curve_length = 0
+    for i in range(1, len(curve_points))
+        segment_length = np.sqrt(np.sum((curve_points[i] - curve_points[i-1])2))
+        curve_length += segment_length
+
+    # Calculate area-based average width
+    average_width_by_area = mask_area  curve_length if curve_length  0 else 0
+
+    # Improved width measurement logic
+    num_width_samples = 10
+    width_sample_indices = np.linspace(0, len(curve_points)-1, num_width_samples).astype(int)
+    widths = []
+    width_lines = []  # Store width line coordinates for plotting
+
+    for i, idx in enumerate(width_sample_indices)
+        point = curve_points[idx].astype(int)
+        
+        # Ensure point is within image boundaries
+        if not (0 = point[0]  binary_mask.shape[0] and 0 = point[1]  binary_mask.shape[1])
+            # If point is out of bounds, find the nearest valid point
+            point[0] = np.clip(point[0], 0, binary_mask.shape[0] - 1)
+            point[1] = np.clip(point[1], 0, binary_mask.shape[1] - 1)
+        
+        # Improved tangent calculation method
+        if idx  0 and idx  len(curve_points) - 1
+            tangent = curve_points[idx+1] - curve_points[idx-1]
+        elif idx == 0
+            tangent = curve_points[1] - curve_points[0]
+        else
+            tangent = curve_points[-1] - curve_points[-2]
+        
+        # Normalize tangent vector and get normal vector
+        tangent = tangent  np.linalg.norm(tangent)
+        normal = np.array([-tangent[1], tangent[0]])
+        
+        # Improved width measurement using larger search range
+        max_search_dist = min(100, max(binary_mask.shape)  4)  # Adaptive search distance
+        left_edge = right_edge = None
+        
+        # Search for edges
+        for dist in range(1, max_search_dist)
+            left_point = (point + dist  normal).astype(int)
+            right_point = (point - dist  normal).astype(int)
+            
+            # Check left side
+            if (left_edge is None and 
+                0 = left_point[0]  binary_mask.shape[0] and 
+                0 = left_point[1]  binary_mask.shape[1])
+                if not binary_mask[left_point[0], left_point[1]]
+                    left_edge = dist
+            
+            # Check right side
+            if (right_edge is None and 
+                0 = right_point[0]  binary_mask.shape[0] and 
+                0 = right_point[1]  binary_mask.shape[1])
+                if not binary_mask[right_point[0], right_point[1]]
+                    right_edge = dist
+            
+            # If both edges are found, terminate early
+            if left_edge is not None and right_edge is not None
+                break
+        
+        # Calculate width - ensure there's always a measurement
+        if left_edge is not None and right_edge is not None
+            width = left_edge + right_edge
+        elif left_edge is not None
+            # If only left edge is found, estimate width
+            width = left_edge  2
+        elif right_edge is not None
+            # If only right edge is found, estimate width
+            width = right_edge  2
+        else
+            # If no edge is found, use default minimum width
+            width = 5  # Default minimum width
+        
+        widths.append(width)
+        
+        # Always create width lines for visualization
+        actual_width = width if (left_edge is not None and right_edge is not None) else width
+        width_line_start = point - (actual_width2)  normal
+        width_line_end = point + (actual_width2)  normal
+        width_lines.append((width_line_start, width_line_end, width))
+
+    # Calculate basic measurements
+    length = np.sqrt(np.sum((end_point - start_point)2))
+    valid_widths = [w for w in widths if w  0]
+    avg_width = np.mean(valid_widths) if valid_widths else 0
+    
+    # Calculate tangent vectors at start and end points
+    start_tangent = curve_points[1] - curve_points[0]
+    start_tangent = start_tangent  np.linalg.norm(start_tangent)
+    
+    end_tangent = curve_points[-1] - curve_points[-2]
+    end_tangent = end_tangent  np.linalg.norm(end_tangent)
+    
+    # Calculate tangent rotation angle from start to end point (radians)
+    dot_product = np.dot(start_tangent, end_tangent)
+    # Prevent numerical errors from causing dot_product to exceed [-1,1] range
+    dot_product = max(min(dot_product, 1.0), -1.0)
+    rotation_angle_rad = np.arccos(dot_product)
+    # Convert to degrees
+    rotation_angle_deg = np.degrees(rotation_angle_rad)
+    
+    # Determine rotation direction (clockwise or counterclockwise)
+    cross_product = np.cross(np.append(start_tangent, 0), np.append(end_tangent, 0))[2]
+    if cross_product  0
+        rotation_angle_deg = -rotation_angle_deg
+
+    # Store detailed results
+    results = {
+        'length' length,
+        'curve_length' curve_length,
+        'average_width' avg_width,
+        'average_width_by_area' average_width_by_area,
+        'start_point' start_point,
+        'center_point' center_point,
+        'end_point' end_point,
+        'control_point' control_point,
+        'curve_points' curve_points,
+        'widths' widths,
+        'width_lines' width_lines,  # Add width line information
+        'width_positions' width_sample_indices,
+        'point1' point1,
+        'point2' point2,
+        'radius' radius,
+        'start_tangent' start_tangent,
+        'end_tangent' end_tangent,
+        'point1_count' count1,
+        'point2_count' count2,
+        'rotation_angle_deg' rotation_angle_deg,
+        'mask_area' mask_area
+    }
+
+    # Improved visualization
+    if visualize
+        fig, ax = plt.subplots(figsize=(12, 10))
+
+        # Draw binary mask
+        ax.imshow(binary_mask, cmap='gray', origin='lower', alpha=0.7)
+
+        # Draw Bezier curve (jet axis)
+        ax.plot(curve_points[, 1], curve_points[, 0], 'r-', linewidth=3, 
+                label='Jet Axis')
+
+        # Draw key points
+        ax.plot(start_point[1], start_point[0], 'go', markersize=12, 
+                label='Start (Base)')
+        ax.plot(end_point[1], end_point[0], 'bo', markersize=12, 
+                label='End (Tip)')
+        ax.plot(center_point[1], center_point[0], 'yo', markersize=10, 
+                label='Center')
+        ax.plot(control_point[1], control_point[0], 'mo', markersize=8, 
+                label='Control Point')
+
+        # Draw circular regions
+        circle1 = plt.Circle((point1[1], point1[0]), radius, 
+                            color='g', fill=False, linestyle='--', alpha=0.7, linewidth=2)
+        circle2 = plt.Circle((point2[1], point2[0]), radius, 
+                            color='b', fill=False, linestyle='--', alpha=0.7, linewidth=2)
+        ax.add_patch(circle1)
+        ax.add_patch(circle2)
+
+        # Draw width measurement lines - using different colors
+        width_colors = plt.cm.viridis(np.linspace(0, 1, len(width_lines)))
+        
+        for i, width_line in enumerate(width_lines)
+            if width_line is not None
+                start_w = width_line[0]
+                end_w = width_line[1]
+                width_value = width_line[2]
+                
+                # Use different colors and display width values
+                ax.plot([start_w[1], end_w[1]], [start_w[0], end_w[0]], 
+                        color=width_colors[i], linewidth=2.5, alpha=0.9,
+                        label=f'W{i+1} {width_value.1f}px' if i  3 else )
+
+        # If there are more than 3 width lines, add overall label
+        if len(width_lines)  3
+            ax.plot([], [], color='cyan', linewidth=2.5, alpha=0.9, 
+                    label=f'Width Lines (×{len(width_lines)})')
+
+        # Draw tangent vector arrows
+        arrow_length = 50
+        start_arrow_end = start_point + arrow_length  start_tangent
+        end_arrow_end = end_point + arrow_length  end_tangent
+        
+        ax.annotate('', xy=(start_arrow_end[1], start_arrow_end[0]),
+                    xytext=(start_point[1], start_point[0]),
+                    arrowprops=dict(arrowstyle='-', color='g', lw=3))
+        
+        ax.annotate('', xy=(end_arrow_end[1], end_arrow_end[0]),
+                    xytext=(end_point[1], end_point[0]),
+                    arrowprops=dict(arrowstyle='-', color='b', lw=3))
+
+        # Add detailed text annotations
+        text_props = dict(boxstyle=round,pad=0.4, facecolor=white, alpha=0.9, edgecolor='gray')
+        
+        ax.text(0.02, 0.98, f'Avg Width (measured) {avg_width.1f} px', 
+                transform=ax.transAxes, fontsize=11, bbox=text_props,
+                verticalalignment='top', weight='bold')
+        
+        ax.text(0.02, 0.91, f'Avg Width (area-based) {average_width_by_area.1f} px', 
+                transform=ax.transAxes, fontsize=11, bbox=text_props,
+                verticalalignment='top')
+        
+        ax.text(0.02, 0.84, f'Rotation Angle {rotation_angle_deg.1f}°', 
+                transform=ax.transAxes, fontsize=11, bbox=text_props,
+                verticalalignment='top')
+        
+        ax.text(0.02, 0.77, f'Total Area {mask_area} px²', 
+                transform=ax.transAxes, fontsize=11, bbox=text_props,
+                verticalalignment='top')
+        
+        ax.text(0.02, 0.70, f'Width samples {len(widths)} points', 
+                transform=ax.transAxes, fontsize=11, bbox=text_props,
+                verticalalignment='top')
+
+        # Add width statistics
+        if valid_widths
+            ax.text(0.02, 0.63, f'Width range {min(valid_widths).1f} - {max(valid_widths).1f} px', 
+                    transform=ax.transAxes, fontsize=10, bbox=text_props,
+                    verticalalignment='top', style='italic')
+
+        ax.set_title('Solar Jet Analysis Circular Region Method', fontsize=14, pad=20)
+        ax.legend(loc='upper right', fontsize=10, framealpha=0.8)
+        ax.grid(True, linestyle='--', alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
+    # Save results to file
+    if save_results and output_file
+        with open(output_file, 'w') as f
+            f.write(Jet Analysis Results (Circular Region Method)n)
+            f.write(===========================================nn)
+            f.write(fLength {length.2f} pixelsn)
+            f.write(fCurve Length {curve_length.2f} pixelsn)
+            f.write(fAverage Width (measured) {avg_width.2f} pixelsn)
+            f.write(fAverage Width (Area-based) {average_width_by_area.2f} pixelsn)
+            f.write(fStart Point ({start_point[0]}, {start_point[1]})n)
+            f.write(fCenter Point ({center_point[0]}, {center_point[1]})n)
+            f.write(fEnd Point ({end_point[0]}, {end_point[1]})n)
+            f.write(fRotation Angle {rotation_angle_deg.2f} degreesn)
+            f.write(fMask Area {mask_area} pixelsn)
+            f.write(fPoints in start region {count1}n)
+            f.write(fPoints in end region {count2}n)
+            f.write(fWidth measurements {len(widths)}n)
+            f.write(fValid width measurements {len(valid_widths)}n)
+            f.write(fWidth values {[f'{w.1f}' for w in widths]}n)
+
+    # Detailed console output
+    print(n===== Comprehensive Jet Analysis Results =====)
+    print(fStart Point ({start_point[0]}, {start_point[1]}))
+    print(fCenter Point ({center_point[0]}, {center_point[1]}))
+    print(fEnd Point ({end_point[0]}, {end_point[1]}))
+    print(fAverage Width (measured) {avg_width.2f} pixels)
+    print(fAverage Width (area-based) {average_width_by_area.2f} pixels)
+    print(fRotation Angle {rotation_angle_deg.2f} degrees)
+    print(fTotal width measurements {len(widths)})
+    print(fValid width measurements {len(valid_widths)})
+    print(fWidth values {[f'{w.1f}' for w in widths]})
+    print(==============================================n)
+
+    return results
+
+def bernstein_poly(i, n, t)
+    
+    Bernstein polynomial basis function for Bezier curves.
+
+    Parameters
+    -----------
+    i  int
+        Index of the basis function
+    n  int
+        Degree of the polynomial
+    t  array
+        Parameter values (between 0 and 1)
+
+    Returns
+    --------
+    array
+        Bernstein polynomial values
+    
+    return np.math.comb(n, i)  (ti)  ((1-t)(n-i))
+
+def bezier_curve(points, num_points=100)
+    
+    Generate points along a Bezier curve defined by control points.
+
+    Parameters
+    -----------
+    points  array
+        Control points of the Bezier curve (n+1 points for degree n curve)
+    num_points  int, optional
+        Number of points to generate along the curve
+
+    Returns
+    --------
+    array
+        Points along the Bezier curve
+    
+    n = len(points) - 1  # Degree of the curve
+    t_values = np.linspace(0, 1, num_points)
+    curve_points = np.zeros((num_points, 2))
+
+    for i in range(n + 1)
+        curve_points += np.outer(bernstein_poly(i, n, t_values), points[i])
+
+    return curve_points
+
+# Example usage
+if __name__ == __main__
+    # This will only run when the script is executed directly
+    print(Run the function with your file path using)
+    print(results = analyze_jet_circular_regions(file_path='your_file_path.fits'))
+    print(This version uses deterministic sampling for consistent results.)
